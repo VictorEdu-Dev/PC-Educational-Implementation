@@ -1,0 +1,481 @@
+JWasm v2.11, Oct 20 2013
+praticaBiosHardwareUFC.asm
+                                ;---------------------------------------------
+                                ; Mapa de I/O
+                                ;
+                                ; 10h  8251 Data
+                                ; 12h  8251 Status/Control -> Usa o pino AD1 ao inves do AD0.
+                                ; 20h  8255
+                                ; 40h  8253 Counter 0
+                                ; 42h  8253 Counter 1
+                                ; 44h  8253 Counter 2
+                                ; 46h  8253 Command
+                                ; 80h  8259 Command
+                                ; 82h  8259 Data
+                                ;---------------------------------------------
+                                ; Mapa de Memória
+                                ; 00000h–003FFh	Interrupt Vector Table (IVT)
+                                ; 00400h–004FFh	BIOS Data Area (BDA)
+                                ; 00500h em diante RAM Convencional
+                                ; E0000h–FFFFFh	128 kB BIOS ROM
+                                ;---------------------------------------------
+
+
+                                .8086
+                                .model large
+                                .code
+
+                                .LIST
+
+                                ;------------------------------------------------------------------------
+                                ;	PORTAR A BIOS DO XT 5150 DE ABR 1983 PARA O NOSSO HARDWARE	:
+                                ;	AS ROTINAS DA BIOS SÃO SOMENTE INTERRUPÇÃO POR SOFTWARE  	:
+                                ;	AS MODIFICAÇÕES FEITAS SERÃO PARA ADEQUAR ESSA BIOS AO		:
+                                ;	NOSSO HARDWARE. ENDEREÇOS ABSOLUTOS DENTRO DO SEGMENTO		:
+                                ;	DE CÓDIGO VIOLAM A ESTRUTURA E O DESIGN DA BIOS SEGUNDO		:
+                                ;	A PRÓPRIA IBM							:
+                                ;------------------------------------------------------------------------
+
+                                ;----------------------------------------
+                                ;		PORTOS			:
+                                ;----------------------------------------
+                                ;PORT_A		EQU	60H		; 8255 PORT A ADDR SEM UTILIZACAO
+                                ;PORT_B		EQU	61H		; 8255 PORT B ADDR SEM UTILIZACAO
+                                ;PORT_C		EQU	62H		; 8255 PORT C ADDR SEM UTILIZACAO
+                                ;CMD_PORT	EQU	63H		; 8255 COMANDO SEM UTILIZACAO
+ = 80                           INTA00		EQU	80H		; 8259 COMANDO
+ = 82                           INTA01		EQU	82H		; 8259 DADOS
+ = 20                           EOI		EQU	20H
+ = 40                           TIMER		EQU	40H
+ = 46                           TIM_CTL 	EQU	46H		; 8253 TIMER CONTROLE
+ = 40                           TIMER0		EQU	40H		; 8253 CONTADOR 0
+ = 1                            TMINT		EQU	01		; TIMER 0 INTR RECVD MASK
+ = 8                            DMA08		EQU	08		; DMA STATUS REG PORT ADDR
+ = 0                            DMA		EQU	00		; DMA CHANNEL 0 ADDRESS REG PORT ADDR
+ = 540                          MAX_PERIOD	EQU	540H
+ = 410                          MIN_PERIOD	EQU	410H
+                                ;KBD_IN		EQU	60H		; TECLADO DATA IN ADDR PORT
+                                ;KBDINT		EQU	02		; TECLADO MASCARA INTR
+                                ;KB_DATA 	EQU	60H		; VARREDURA DO TECLADO CODIGO PORTA
+                                ;KB_CTL		EQU	61H		; BITS DE CONTROLE PARA TECLADO
+
+                                ;----------------------------------------
+                                ;	 LOCALIZAÇÃO DAS INTERRUPÇÕES	:
+                                ;----------------------------------------
+
+00000000                        ABS0	SEGMENT AT 0
+00000000                        STG_LOC0	LABEL	BYTE
+                                	ORG	2*4
+00000008                        NMI_PTR 	LABEL	WORD
+                                	ORG	5*4
+00000014                        INT5_PTR	LABEL	WORD
+                                	ORG	8*4
+00000020                        INT_ADDR	LABEL	WORD
+00000020                        INT_PTR 	LABEL	DWORD
+                                	ORG	10H*4
+00000040                        VIDEO_INT	LABEL	WORD
+                                	ORG	1DH*4
+00000074                        PARM_PTR	LABEL	DWORD		; POINTER TO VIDEO PARMS
+                                	ORG	18H*4
+00000060                        BASIC_PTR	LABEL	WORD		; ENTRY POINT FOR CASSETTE BASIC
+                                	ORG	01EH*4			; INTERRUPT 1EH
+00000078                        DISK_POINTER	LABEL	DWORD
+                                	ORG	01FH*4			; LOCATION OF POINTER
+0000007C                        EXT_PTR LABEL	DWORD			; POINTER TO EXTENSION
+                                	ORG	400H
+00000400                        DATA_AREA	LABEL	BYTE		; ABSOLUTE LOCATION OF DATA SEGMENT
+00000400                        DATA_WORD	LABEL	WORD
+                                	ORG	0500H
+00000500                        MFG_TEST_RTN	LABEL	FAR
+                                	ORG	7C00H
+00007C00                        BOOT_LOCN	LABEL	FAR
+00007C00                        ABS0		ENDS
+
+                                ;------------------------------------------------
+                                ; STACK -- USED DURING INITIALIZATION ONLY	:
+                                ;------------------------------------------------
+
+00000000                        STACK	SEGMENT AT 30H
+00000000  000000000000000000    	DW	128 DUP(?)
+00000100                        TOS	LABEL	WORD
+00000100                        STACK	ENDS
+
+                                ;----------------------------------------
+                                ;	KEYBOARD DATA AREAS		:
+                                ;----------------------------------------
+
+00000000  00                    KB_FLAG 	DB	?
+
+                                ;----- SHIFT FLAG EQUATES WITHIN KB_FLAG
+
+ = 80                           INS_STATE	EQU	80H		; INSERT STATE IS ACTIVE
+ = 40                           CAPS_STATE	EQU	40H		; CAPS LOCK STATE HAS BEEN TOGGLED
+ = 20                           NUM_STATE	EQU	20H		; NUM LOCK STATE HAS BEEN TOGGLED
+ = 10                           SCROLL_STATE	EQU	10H		; SCROLL LOCK STATE HAS BEEN TOGGLED
+ = 8                            ALT_SHIFT	EQU	08H		; ALTERNATE SHIFT KEY DEPRESSED
+ = 4                            CTL_SHIFT	EQU	04H		; CONTROL SHIFT KEY DEPRESSED
+ = 2                            LEFT_SHIFT	EQU	02H		; LEFT SHIFT KEY DEPRESSED
+ = 1                            RIGHT_SHIFT	EQU	01H		; RIGHT SHIFT KEY DEPRESSED
+
+00000001  00                    KB_FLAG_1	DB	?		; SECOND BYTE OF KEYBOARD STATUS
+
+ = 80                           INS_SHIFT	EQU	80H		; INSERT KEY IS DEPRESSED
+ = 40                           CAPS_SHIFT	EQU	40H		; CAPS LOCK KEY IS DEPRESSED
+ = 20                           NUM_SHIFT	EQU	20H		; NUM LOCK KEY IS DEPRESSED
+ = 10                           SCROLL_SHIFT	EQU	10H		; SCROLL LOCK KEY IS DEPRESSED
+ = 8                            HOLD_STATE	EQU	08H		; SUSPEND KEY HAS BEEN TOGGLED
+
+00000002  00                    ALT_INPUT	DB	?		; STORAGE FOR ALTERNATE KEYPAD ENTRY
+00000003  0000                  BUFFER_HEAD	DW	?		; POINTER TO HEAD OF KEYBOARD BUFFER
+00000005  0000                  BUFFER_TAIL	DW	?		; POINTER TO TAIL OF KEYBOARD BUFFER
+00000007  000000000000000000    KB_BUFFER	DW	16 DUP(?)	; ROOM FOR 15 ENTRIES
+00000027                        KB_BUFFER_END	LABEL	WORD
+
+                                ;------ HEAD = TAIL INDICATES THAT THE BUFFER IS EMPTY
+
+ = 45                           NUM_KEY 	EQU	69		; SCAN CODE FOR NUMBER LOCK
+ = 46                           SCROLL_KEY	EQU	70		; SCROLL LOCK KEY
+ = 38                           ALT_KEY 	EQU	56		; ALTERNATE SHIFT KEY SCAN CODE
+ = 1D                           CTL_KEY 	EQU	29		; SCAN CODE FOR CONTROL KEY
+ = 3A                           CAPS_KEY	EQU	58		; SCAN CODE FOR SHIFT LOCK
+ = 2A                           LEFT_KEY	EQU	42		; SCAN CODE FOR LEFT SHIFT
+ = 36                           RIGHT_KEY	EQU	54		; SCAN CODE FOR RIGHT SHIFT
+ = 52                           INS_KEY 	EQU	82		; SCAN CODE FOR INSERT KEY
+ = 53                           DEL_KEY 	EQU	83		; SCAN CODE FOR DELETE KEY
+
+                                ;----------------------------------------
+                                ;	POST DATA AREA			:
+                                ;----------------------------------------
+00000027  0000                  IO_ROM_INIT	DW	?		; PNTR TO OPTIONAL I/O ROM INIT ROUTINE
+00000029  0000                  IO_ROM_SEG	DW	?		; POINTER TO IO ROM SEGMENT
+0000002B  00                    INTR_FLAG	DB	?		; FLAG TO INDICATE AN INTERRUPT HAPPEND
+
+                                ;----------------------------------------
+                                ;	TIMER DATA AREA 		:
+                                ;----------------------------------------
+0000002C  0000                  TIMER_LOW	DW	?		; LOW WORD OF TIMER COUNT
+0000002E  0000                  TIMER_HIGH	DW	?		; HIGH WORD OF TIMER COUNT
+00000030  00                    TIMER_OFL	DB	?		; TIMER HAS ROLLED OVER SINCE LAST READ
+                                ;COUNTS_SEC	EQU	18
+                                ;COUNTS_MIN	EQU	1092
+                                ;COUNTS_HOUR	EQU	65543
+                                ;COUNTS_DAY	EQU	1573040 = 1800B0H
+
+                                ;----------------------------------------
+                                ;	   SYSTEM DATA AREA		:
+                                ;----------------------------------------
+00000031  00                    BIOS_BREAK	DB	?		; BIT 7 = 1 IF BREAK KEY HAS BEEN HIT
+00000032  0000                  RESET_FLAG	DW	?		; WORD = 1234H IF KEYBOARD RESET UNDERWAY
+                                ;----------------------------------------
+                                ;	  FIXED DISK DATA AREA		:
+                                ;----------------------------------------
+00000034  0000                  		DW	?		;
+00000036  0000                  		DW	?		;
+
+                                ;--------------------------------------------------------
+                                ;	PRINTER AND RS232 TIME-OUT VARIABLES		:
+                                ;--------------------------------------------------------
+00000038  00000000              PRINT_TIM_OUT	DB	4 DUP(?)
+0000003C  00000000              RS232_TIM_OUT	DB	4 DUP(?)
+                                ;----------------------------------------
+                                ;	EXTRA DATA AREA 		:
+                                ;----------------------------------------
+00000000                        XXDATA	SEGMENT AT 50H
+00000000  00                    STATUS_BYTE	DB	?
+00000001                        XXDATA		ENDS
+
+
+
+                                ORG 0E0000h
+000E0000                        uart_int:
+000E0000  E410                      in  al,10h
+000E0002  E610                      out 10h,al
+000E0004  8807                      mov ds:[bx],al 
+000E0006  83C302                    add bx,2
+                                   ;finaliza a interrupcao	
+000E0009  B020                      mov al,20h          
+000E000B  E680                      out 80h,al
+000E000D  CF                        iret
+
+
+                                org 0F0000h
+
+000F0000                        init_bios:
+000F0000  8ED0                      mov ss,ax
+000F0002  BC0004                    mov sp,0400h
+000F0005  8EC0                      mov es,ax
+
+
+000F0007                        init_8251:
+
+
+                                ;---------------------------------------------
+                                ; Parametrizar 8251
+                                ;---------------------------------------------
+                                    ; Resetar 8251
+                                    ;Bit	Name	Value	Meaning
+                                    ;D7	EH	0	Hunt mode disabled (sync mode only)
+                                    ;D6	IR	1	Internal Reset
+                                    ;D5	RTS	0	RTS inactive
+                                    ;D4	ER	0	Reset error flags disabled
+                                    ;D3	SBRK	0	Don't transmit BREAK
+                                    ;D2	RxE	0	Receiver disabled
+                                    ;D1	DTR	0	DTR inactive
+                                    ;D0	TxEN	0	Transmitter disabled
+000F0007  B040                      mov al,40h
+000F0009  E612                      out 12h,al
+000F000B  B040                      mov al,40h
+000F000D  E612                      out 12h,al
+000F000F  B040                      mov al,40h
+000F0011  E612                      out 12h,al
+000F0013  B040                      mov al,40h
+000F0015  E612                      out 12h,al
+
+                                    ; Datasheet do 8251A recomenda inclusao de wait states apos resetar.
+                                    ;mov cx,1000
+                                    ;delay:
+                                    ;    loop delay
+
+                                    ; 8-N-1 Baud 9600 para 5Mhz
+                                    ;D1 D0	Meaning
+                                    ;00	Synchronous
+                                    ;01	×1
+                                    ;10	×16
+                                    ;11	×64
+                                    ;D3 D2	Bits Character length
+                                    ;00	5 bits
+                                    ;01	6 bits
+                                    ;10	7 bits
+                                    ;11	8 bits
+                                    ;D4
+                                    ;Parity Enable
+                                    ;0
+                                    ;D5
+                                    ;Even/Odd parity (1/0)
+                                    ;X Don't care
+                                    ;D7-D6
+                                    ;Stop bits
+                                    ;01 -> 1 stop bit
+                                    ;10 -> 1.5 stop bits
+                                    ;11 -> 2 stop bits
+000F0017  B04E                      mov al,4eh
+000F0019  E612                      out 12h,al
+
+                                    ; Comando word
+000F001B  B015                      mov al,15h
+000F001D  E612                      out 12h,al
+
+000F001F                        init_8259:
+                                ;---------------------------------------------
+                                ; Parametrizar 8259
+                                ;---------------------------------------------
+
+                                ;ICW1
+                                ;Bit  Valor  Descricao
+                                ;D4    1     Start Initialization - Vai configurar ICW4 na sequencia. O byte enviado agora é ICW1
+                                ;D3    0     0 Edge triggered / 1 Level triggered
+                                ;D2    0     Call address interval (ignored in 8086 mode) somente para 8080-8085.
+                                ;D1    1     Single PIC (Pula ICW3)
+                                ;D0    1     ICW4 will follow
+
+000F001F  B013                  mov al,13h
+000F0021  E680                  out 80h,al
+
+                                ;ICW2
+                                ;Interrupt Vector Base (onde começa o vetor de interrupcao)
+                                ;IRQ0 → INT 20h
+                                ;IRQ1 → INT 21h
+                                ;IRQ2 → INT 22h
+                                ;...
+                                ;IRQ7 → INT 27h
+                                ;0x00 até 0x1F é reservado pela Intel (NMI, div por 0, etc...)
+                                ;0x20 a 0x27 e usado pelo MS-DOS e pela IBM (caso queiramos portar nosso computador pra esse OS)
+
+000F0023  B020                  mov al,20h
+000F0025  E682                  out 82h,al
+
+                                ;ICW4
+                                ;Bit  Valor  Descricao
+                                ;D0     1    8086 mode 1 = 8086/8088 mode, 0 = 8080/8085 mode
+                                ;D1     0    Normal EOI Automatic End Of Interrupt
+                                ;D2     0    Master/slave when buffered disabled
+                                ;D3     0    Buffered mode disabled
+                                ;D4     0    Special Fully Nested Mode disabled
+
+000F0027  B001                  mov al,01h
+000F0029  E682                  out 82h,al
+
+
+                                ;OCW1(IMR)
+                                ;11101111b = FDh habilita so o serial (IRQ4); Compativel com MS-DOS
+
+000F002B  B0EF                  mov al,0EFh
+000F002D  E682                  out 82h,al
+
+000F002F                        init_8253:
+                                ;---------------------------------------------
+                                ; Parametrizar 8253
+                                ;---------------------------------------------
+                                ;Bits			Descrição
+                                ;D7–D6 (SC1:SC0)	Seleciona contador 0, 1 ou 2
+                                ;D5–D4 (RW1:RW0)	Seleciona byte baixo, byte alto, ou byte baixo seguido de byte alto ou comando de latch da contagem atual
+                                ;D3–D1 (M2:M0)		Seleciona o modo de contagem.
+                                ;D0 (BCD)		0 seleciona contador binário; 1 seleciona contador BCD.
+
+                                ; Configura Contador 0:
+                                ; Mode 3, binary, low byte followed by high byte
+
+000F002F  B036                  MOV AL, 36H	  ; Contador 0 Modo 3(Onda quadrada), contador binário
+000F0031  E646                  OUT 46H, AL       ; Word de Controle
+
+                                ;Carrega a contagem no Contador 0
+000F0033  B00C                  MOV AL, 0CH      ; Byte baixo
+000F0035  E640                  OUT 40H, AL
+
+000F0037  B000                  MOV AL, 00H       ; Byte alto
+000F0039  E640                  OUT 40H, AL
+
+                                   
+ = 0                            UART_OFFSET  = 00000h
+ = E000                         UART_SEGMENT = 0E000h
+
+
+
+                                ;setando RxRDY para int24h
+000F003B  B80000                    mov ax, UART_OFFSET
+000F003E  89849000                  mov [si+90h], ax
+000F0042  B800E0                    mov ax, UART_SEGMENT
+000F0045  89849200                  mov [si+92h], ax
+000F0049  FB                        sti
+
+
+
+
+000F004A                        loop_principal:
+000F004A  90                        nop
+000F004B  EBFD                      jmp     loop_principal
+
+
+                                org 0FFFF0h
+
+000FFFF0                        inicio:
+000FFFF0  B80000                    mov ax,0000h
+000FFFF3  8ED8                      mov ds,ax
+000FFFF5  8ED0                      mov ss,ax	
+000FFFF7  BB0001                    mov bx,0100h
+000FFFFA  EA00000000                jmp far ptr init_bios
+
+                                end inicio
+
+
+Macros:
+
+                N a m e                 Type
+
+@CatStr  . . . . . . . . . . . .        Func
+@Environ . . . . . . . . . . . .        Func
+@InStr . . . . . . . . . . . . .        Func
+@SizeStr . . . . . . . . . . . .        Func
+@SubStr  . . . . . . . . . . . .        Func
+
+
+Segments and Groups:
+
+                N a m e                 Size     Length   Align   Combine Class
+
+ABS0 . . . . . . . . . . . . . .        16 Bit   7C00     Abs     Private ''
+PRATICABIOSHARDWAREUFC_TEXT  . .        16 Bit   FFFFF     Word    Public  'CODE'
+STACK  . . . . . . . . . . . . .        16 Bit   0100     Abs     Private ''
+XXDATA . . . . . . . . . . . . .        16 Bit   0001     Abs     Private ''
+DGROUP . . . . . . . . . . . . .        GROUP
+_DATA  . . . . . . . . . . . . .        16 Bit   0000     Word    Public  'DATA'
+
+
+Symbols:
+
+                N a m e                 Type       Value     Attr
+
+@CodeSize  . . . . . . . . . . .        Number             1h 
+@DataSize  . . . . . . . . . . .        Number             1h 
+@Interface . . . . . . . . . . .        Number             0h 
+@Model . . . . . . . . . . . . .        Number             5h 
+@code  . . . . . . . . . . . . .        Text   PRATICABIOSHARDWAREUFC_TEXT
+@data  . . . . . . . . . . . . .        Text   DGROUP
+@stack . . . . . . . . . . . . .        Text   DGROUP
+ALT_INPUT  . . . . . . . . . . .        Byte               2h PRATICABIOSHARDWAREUFC_TEXT 
+ALT_KEY  . . . . . . . . . . . .        Number            38h 
+ALT_SHIFT  . . . . . . . . . . .        Number             8h 
+BASIC_PTR  . . . . . . . . . . .        Word              60h ABS0 
+BIOS_BREAK . . . . . . . . . . .        Byte              31h PRATICABIOSHARDWAREUFC_TEXT 
+BOOT_LOCN  . . . . . . . . . . .        L Far           7C00h ABS0 
+BUFFER_HEAD  . . . . . . . . . .        Word               3h PRATICABIOSHARDWAREUFC_TEXT 
+BUFFER_TAIL  . . . . . . . . . .        Word               5h PRATICABIOSHARDWAREUFC_TEXT 
+CAPS_KEY . . . . . . . . . . . .        Number            3Ah 
+CAPS_SHIFT . . . . . . . . . . .        Number            40h 
+CAPS_STATE . . . . . . . . . . .        Number            40h 
+CTL_KEY  . . . . . . . . . . . .        Number            1Dh 
+CTL_SHIFT  . . . . . . . . . . .        Number             4h 
+DATA_AREA  . . . . . . . . . . .        Byte             400h ABS0 
+DATA_WORD  . . . . . . . . . . .        Word             400h ABS0 
+DEL_KEY  . . . . . . . . . . . .        Number            53h 
+DISK_POINTER . . . . . . . . . .        DWord             78h ABS0 
+DMA  . . . . . . . . . . . . . .        Number             0h 
+DMA08  . . . . . . . . . . . . .        Number             8h 
+EOI  . . . . . . . . . . . . . .        Number            20h 
+EXT_PTR  . . . . . . . . . . . .        DWord             7Ch ABS0 
+HOLD_STATE . . . . . . . . . . .        Number             8h 
+INS_KEY  . . . . . . . . . . . .        Number            52h 
+INS_SHIFT  . . . . . . . . . . .        Number            80h 
+INS_STATE  . . . . . . . . . . .        Number            80h 
+INT5_PTR . . . . . . . . . . . .        Word              14h ABS0 
+INTA00 . . . . . . . . . . . . .        Number            80h 
+INTA01 . . . . . . . . . . . . .        Number            82h 
+INTR_FLAG  . . . . . . . . . . .        Byte              2Bh PRATICABIOSHARDWAREUFC_TEXT 
+INT_ADDR . . . . . . . . . . . .        Word              20h ABS0 
+INT_PTR  . . . . . . . . . . . .        DWord             20h ABS0 
+IO_ROM_INIT  . . . . . . . . . .        Word              27h PRATICABIOSHARDWAREUFC_TEXT 
+IO_ROM_SEG . . . . . . . . . . .        Word              29h PRATICABIOSHARDWAREUFC_TEXT 
+KB_BUFFER  . . . . . . . . . . .        Word[16]           7h PRATICABIOSHARDWAREUFC_TEXT 
+KB_BUFFER_END  . . . . . . . . .        Word              27h PRATICABIOSHARDWAREUFC_TEXT 
+KB_FLAG  . . . . . . . . . . . .        Byte               0h PRATICABIOSHARDWAREUFC_TEXT 
+KB_FLAG_1  . . . . . . . . . . .        Byte               1h PRATICABIOSHARDWAREUFC_TEXT 
+LEFT_KEY . . . . . . . . . . . .        Number            2Ah 
+LEFT_SHIFT . . . . . . . . . . .        Number             2h 
+MAX_PERIOD . . . . . . . . . . .        Number           540h 
+MFG_TEST_RTN . . . . . . . . . .        L Far            500h ABS0 
+MIN_PERIOD . . . . . . . . . . .        Number           410h 
+NMI_PTR  . . . . . . . . . . . .        Word               8h ABS0 
+NUM_KEY  . . . . . . . . . . . .        Number            45h 
+NUM_SHIFT  . . . . . . . . . . .        Number            20h 
+NUM_STATE  . . . . . . . . . . .        Number            20h 
+PARM_PTR . . . . . . . . . . . .        DWord             74h ABS0 
+PRINT_TIM_OUT  . . . . . . . . .        Byte[4]           38h PRATICABIOSHARDWAREUFC_TEXT 
+RESET_FLAG . . . . . . . . . . .        Word              32h PRATICABIOSHARDWAREUFC_TEXT 
+RIGHT_KEY  . . . . . . . . . . .        Number            36h 
+RIGHT_SHIFT  . . . . . . . . . .        Number             1h 
+RS232_TIM_OUT  . . . . . . . . .        Byte[4]           3Ch PRATICABIOSHARDWAREUFC_TEXT 
+SCROLL_KEY . . . . . . . . . . .        Number            46h 
+SCROLL_SHIFT . . . . . . . . . .        Number            10h 
+SCROLL_STATE . . . . . . . . . .        Number            10h 
+STATUS_BYTE  . . . . . . . . . .        Byte               0h XXDATA 
+STG_LOC0 . . . . . . . . . . . .        Byte               0h ABS0 
+TIMER  . . . . . . . . . . . . .        Number            40h 
+TIMER0 . . . . . . . . . . . . .        Number            40h 
+TIMER_HIGH . . . . . . . . . . .        Word              2Eh PRATICABIOSHARDWAREUFC_TEXT 
+TIMER_LOW  . . . . . . . . . . .        Word              2Ch PRATICABIOSHARDWAREUFC_TEXT 
+TIMER_OFL  . . . . . . . . . . .        Byte              30h PRATICABIOSHARDWAREUFC_TEXT 
+TIM_CTL  . . . . . . . . . . . .        Number            46h 
+TMINT  . . . . . . . . . . . . .        Number             1h 
+TOS  . . . . . . . . . . . . . .        Word             100h STACK 
+UART_OFFSET  . . . . . . . . . .        Number             0h 
+UART_SEGMENT . . . . . . . . . .        Number          E000h 
+VIDEO_INT  . . . . . . . . . . .        Word              40h ABS0 
+inicio . . . . . . . . . . . . .        L Near         FFFF0h PRATICABIOSHARDWAREUFC_TEXT Public 
+init_8251  . . . . . . . . . . .        L Near         F0007h PRATICABIOSHARDWAREUFC_TEXT 
+init_8253  . . . . . . . . . . .        L Near         F002Fh PRATICABIOSHARDWAREUFC_TEXT 
+init_8259  . . . . . . . . . . .        L Near         F001Fh PRATICABIOSHARDWAREUFC_TEXT 
+init_bios  . . . . . . . . . . .        L Near         F0000h PRATICABIOSHARDWAREUFC_TEXT 
+loop_principal . . . . . . . . .        L Near         F004Ah PRATICABIOSHARDWAREUFC_TEXT 
+uart_int . . . . . . . . . . . .        L Near         E0000h PRATICABIOSHARDWAREUFC_TEXT 
+
+praticaBiosHardwareUFC.asm: 366 lines, 2 passes, 0 ms, 1 warnings, 1 errors
