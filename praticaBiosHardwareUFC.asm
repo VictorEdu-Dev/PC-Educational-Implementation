@@ -375,7 +375,39 @@ START:	CLI				; DISABLE INTERRUPTS
 	SHL	AH,1			; CHECK THAT OF IS CLEAR
 	JO	ERR01			; GO TO ERR ROUTINE IF ON
 
+;----- READ/WRITE THE 8088 GENERAL AND SEGMENTATION REGISTERS
+;      WITH ALL ONE'S AND ZEROES'S.
+
+	MOV	AX,0FFFFH		; SETUP ONE'S PATTERN IN AX
+	STC
+C8:	MOV	DS,AX			; WRITE PATTERN TO ALL REGS
+	MOV	BX,DS
+	MOV	ES,BX
+	MOV	CX,ES
+	MOV	SS,CX
+	MOV	DX,SS
+	MOV	SP,DX
+	MOV	BP,SP
+	MOV	SI,BP
+	MOV	DI,SI
+	JNC	C9			; TST1A
+	XOR	AX,DI			; PATTERN MAKE IT THRU ALL REGS
+	JNZ	ERR01			; NO - GO TO ERR ROUTINE
+	CLC
+	JMP	C8
+C9:					; TST1A
+	OR	AX,DI			; ZERO PATTERN MAKE IT THRU?
+	JZ	C10			; YES - GO TO NEXT TEST
 ERR01:	HLT				; HALT SYSTEM
+;----------------------------------------
+;	ROS CHECKSUM TEST I		:
+;DESCRIPTION				:
+;	A CHECKSUM IS DONE FOR THE 8K	:
+;	ROS MODULE CONTAINING POD AND	:
+;	BIOS.				:
+;----------------------------------------
+C10:
+
 ;--------------------------------------------------------
 ;	TIMER 1 FUNCTIONS OK. WRITE/READ THE CURRENT	:
 ;	ADDRESS AND WORD COUNT REGISTERS FOR ALL	:
@@ -383,7 +415,7 @@ ERR01:	HLT				; HALT SYSTEM
 ;	REFRESH.					:
 ;--------------------------------------------------------
 
-
+STI
 loop_principal:
     nop
     jmp     loop_principal
