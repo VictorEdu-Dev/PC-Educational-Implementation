@@ -423,7 +423,9 @@ praticaBiosHardwareUFC.asm
 000F00A1  FC                    	CLD				; SET DIRECTION FLAG TO INC.
                                 ;	ASSUME	SS:CODE
 000F00A2  BB00E0                	MOV	BX,0E000H		; SETUP STARTING ROS ADDR
-000F00A5  BC0000                	MOV	SP,OFFSET C1		; SETUP RETURN ADDRESS
+                                ;	MOV	SP,OFFSET C1		; SETUP RETURN ADDRESS
+000F00A5  BCFFFF                	MOV	SP,0FFFFh		; SETUP RETURN ADDRESS
+
 000F00A8  EB02                  	JMP	ROS_CHECKSUM
 000F00AA  75F0                  C11:	JNE	ERR01			; HALT SYSTEM IF ERROR
 
@@ -448,8 +450,8 @@ praticaBiosHardwareUFC.asm
 000F00B6  0AC0                  	OR	AL,AL			; SUM = 0?
 000F00B8                        	RET
 000F00B9                        ROS_CHECKSUM	ENDP
-
 000F00B9  FB                    	STI				;ativa interrupcoes novamente
+
 000F00BA                        loop_principal:
 000F00BA  90                        nop
 000F00BB  EBFD                      jmp     loop_principal
@@ -594,4 +596,4 @@ init_bios  . . . . . . . . . . .        L Near         F0000h PRATICABIOSHARDWAR
 loop_principal . . . . . . . . .        L Near         F00BAh PRATICABIOSHARDWAREUFC_TEXT 
 uart_int . . . . . . . . . . . .        L Near         E0000h PRATICABIOSHARDWAREUFC_TEXT 
 
-praticaBiosHardwareUFC.asm: 465 lines, 2 passes, 0 ms, 1 warnings, 1 errors
+praticaBiosHardwareUFC.asm: 467 lines, 2 passes, 0 ms, 1 warnings, 1 errors
