@@ -602,4 +602,4 @@ init_bios  . . . . . . . . . . .        L Near         F0000h PRATICABIOSHARDWAR
 loop_principal . . . . . . . . .        L Near         F00BFh PRATICABIOSHARDWAREUFC_TEXT 
 uart_int . . . . . . . . . . . .        L Near         E0000h PRATICABIOSHARDWAREUFC_TEXT 
 
-praticaBiosHardwareUFC.asm: 473 lines, 2 passes, 0 ms, 1 warnings, 1 errors
+praticaBiosHardwareUFC.asm: 473 lines, 2 passes, 16 ms, 1 warnings, 1 errors

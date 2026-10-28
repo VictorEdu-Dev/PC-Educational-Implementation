@@ -452,8 +452,6 @@ ROS_CHECKSUM	ENDP
 ;--------------------------------------------------------
 ;	VOLTA AO NOSSO CÓDIGO
 ;--------------------------------------------------------
-	mov ax,0000h
-	mov ds,ax
 	STI				;ativa interrupcoes novamente
 
 loop_principal:
