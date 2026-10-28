@@ -182,6 +182,13 @@ XXDATA	SEGMENT AT 50H
 STATUS_BYTE	DB	?
 XXDATA		ENDS
 
+;----------------------------------------
+;	DATA DEFINITIONS		:
+;----------------------------------------
+
+C1	DW	C11		; RETURN ADDRESS
+;C2	DW	C24		; RETURN ADDRESS FOR DUMMY STACK
+
 
 
 ORG 0E0000h
@@ -407,6 +414,17 @@ ERR01:	HLT				; HALT SYSTEM
 ;	BIOS.				:
 ;----------------------------------------
 C10:
+	MOV	AX,CS			; SETUP SS SEG REG
+;	MOV	SS,AX
+	MOV	DS,AX			; SET UP DATA SEG TO POINT TO
+					; ROM ADDRESS
+	CLD				; SET DIRECTION FLAG TO INC.
+;	ASSUME	SS:CODE
+	MOV	BX,0E000H		; SETUP STARTING ROS ADDR
+	MOV	SP,OFFSET C1		; SETUP RETURN ADDRESS
+	JMP	ROS_CHECKSUM
+C11:	JNE	ERR01			; HALT SYSTEM IF ERROR
+
 
 ;--------------------------------------------------------
 ;	TIMER 1 FUNCTIONS OK. WRITE/READ THE CURRENT	:
@@ -414,8 +432,22 @@ C10:
 ;	CHANNELS.  INITIALIZE AND START DMA FOR MEMORY	:
 ;	REFRESH.					:
 ;--------------------------------------------------------
+;----------------------------------------
+;	ROS CHECKSUM SUBROUTINE 	:
+;----------------------------------------
+ROS_CHECKSUM	PROC	NEAR		; NEXT_ROS_MODULE
+	MOV	CX,8192 		; NUMBER OF BYTES TO ADD
+ROS_CHECKSUM_CNT:			; ENTRY FOR OPTIONAL ROS TEST
+	XOR	AL,AL
+C26:
+	ADD	AL,DS:[BX]
+	INC	BX			; POINT TO NEXT BYTE
+	LOOP	C26			; ADD ALL BYTES IN ROS MODULE
+	OR	AL,AL			; SUM = 0?
+	RET
+ROS_CHECKSUM	ENDP
 
-STI
+	STI				;ativa interrupcoes novamente
 loop_principal:
     nop
     jmp     loop_principal

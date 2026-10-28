@@ -184,6 +184,13 @@ praticaBiosHardwareUFC.asm
 00000000  00                    STATUS_BYTE	DB	?
 00000001                        XXDATA		ENDS
 
+                                ;----------------------------------------
+                                ;	DATA DEFINITIONS		:
+                                ;----------------------------------------
+
+00000040  0000                  C1	DW	C11		; RETURN ADDRESS
+                                ;C2	DW	C24		; RETURN ADDRESS FOR DUMMY STACK
+
 
 
                                 ORG 0E0000h
@@ -409,6 +416,17 @@ praticaBiosHardwareUFC.asm
                                 ;	BIOS.				:
                                 ;----------------------------------------
 000F009D                        C10:
+000F009D  8CC8                  	MOV	AX,CS			; SETUP SS SEG REG
+                                ;	MOV	SS,AX
+000F009F  8ED8                  	MOV	DS,AX			; SET UP DATA SEG TO POINT TO
+                                					; ROM ADDRESS
+000F00A1  FC                    	CLD				; SET DIRECTION FLAG TO INC.
+                                ;	ASSUME	SS:CODE
+000F00A2  BB00E0                	MOV	BX,0E000H		; SETUP STARTING ROS ADDR
+000F00A5  BC0000                	MOV	SP,OFFSET C1		; SETUP RETURN ADDRESS
+000F00A8  EB02                  	JMP	ROS_CHECKSUM
+000F00AA  75F0                  C11:	JNE	ERR01			; HALT SYSTEM IF ERROR
+
 
                                 ;--------------------------------------------------------
                                 ;	TIMER 1 FUNCTIONS OK. WRITE/READ THE CURRENT	:
@@ -416,11 +434,25 @@ praticaBiosHardwareUFC.asm
                                 ;	CHANNELS.  INITIALIZE AND START DMA FOR MEMORY	:
                                 ;	REFRESH.					:
                                 ;--------------------------------------------------------
+                                ;----------------------------------------
+                                ;	ROS CHECKSUM SUBROUTINE 	:
+                                ;----------------------------------------
+000F00AC                        ROS_CHECKSUM	PROC	NEAR		; NEXT_ROS_MODULE
+000F00AC  B90020                	MOV	CX,8192 		; NUMBER OF BYTES TO ADD
+000F00AF                        ROS_CHECKSUM_CNT:			; ENTRY FOR OPTIONAL ROS TEST
+000F00AF  32C0                  	XOR	AL,AL
+000F00B1                        C26:
+000F00B1  0207                  	ADD	AL,DS:[BX]
+000F00B3  43                    	INC	BX			; POINT TO NEXT BYTE
+000F00B4  E2FB                  	LOOP	C26			; ADD ALL BYTES IN ROS MODULE
+000F00B6  0AC0                  	OR	AL,AL			; SUM = 0?
+000F00B8                        	RET
+000F00B9                        ROS_CHECKSUM	ENDP
 
-000F009D  FB                    STI
-000F009E                        loop_principal:
-000F009E  90                        nop
-000F009F  EBFD                      jmp     loop_principal
+000F00B9  FB                    	STI				;ativa interrupcoes novamente
+000F00BA                        loop_principal:
+000F00BA  90                        nop
+000F00BB  EBFD                      jmp     loop_principal
 
 
                                 org 0FFFF0h
@@ -458,6 +490,15 @@ DGROUP . . . . . . . . . . . . .        GROUP
 _DATA  . . . . . . . . . . . . .        16 Bit   0000     Word    Public  'DATA'
 
 
+Procedures, parameters and locals:
+
+                N a m e                 Type     Value    Segment  Length
+
+ROS_CHECKSUM . . . . . . . . . .        P Near   F00AC     PRATICABIOSHARDWAREUFC_TEXT 000D Public   
+  C26  . . . . . . . . . . . . .        L Near   F00B1     PRATICABIOSHARDWAREUFC_TEXT
+  ROS_CHECKSUM_CNT . . . . . . .        L Near   F00AF     PRATICABIOSHARDWAREUFC_TEXT
+
+
 Symbols:
 
                 N a m e                 Type       Value     Attr
@@ -477,7 +518,9 @@ BIOS_BREAK . . . . . . . . . . .        Byte              31h PRATICABIOSHARDWAR
 BOOT_LOCN  . . . . . . . . . . .        L Far           7C00h ABS0 
 BUFFER_HEAD  . . . . . . . . . .        Word               3h PRATICABIOSHARDWAREUFC_TEXT 
 BUFFER_TAIL  . . . . . . . . . .        Word               5h PRATICABIOSHARDWAREUFC_TEXT 
+C1 . . . . . . . . . . . . . . .        Word              40h PRATICABIOSHARDWAREUFC_TEXT 
 C10  . . . . . . . . . . . . . .        L Near         F009Dh PRATICABIOSHARDWAREUFC_TEXT 
+C11  . . . . . . . . . . . . . .        L Near         F00AAh PRATICABIOSHARDWAREUFC_TEXT 
 C8 . . . . . . . . . . . . . . .        L Near         F007Bh PRATICABIOSHARDWAREUFC_TEXT 
 C9 . . . . . . . . . . . . . . .        L Near         F0098h PRATICABIOSHARDWAREUFC_TEXT 
 CAPS_KEY . . . . . . . . . . . .        Number            3Ah 
@@ -548,7 +591,7 @@ init_8251  . . . . . . . . . . .        L Near         F0007h PRATICABIOSHARDWAR
 init_8253  . . . . . . . . . . .        L Near         F002Fh PRATICABIOSHARDWAREUFC_TEXT 
 init_8259  . . . . . . . . . . .        L Near         F001Fh PRATICABIOSHARDWAREUFC_TEXT 
 init_bios  . . . . . . . . . . .        L Near         F0000h PRATICABIOSHARDWAREUFC_TEXT 
-loop_principal . . . . . . . . .        L Near         F009Eh PRATICABIOSHARDWAREUFC_TEXT 
+loop_principal . . . . . . . . .        L Near         F00BAh PRATICABIOSHARDWAREUFC_TEXT 
 uart_int . . . . . . . . . . . .        L Near         E0000h PRATICABIOSHARDWAREUFC_TEXT 
 
-praticaBiosHardwareUFC.asm: 433 lines, 2 passes, 0 ms, 1 warnings, 1 errors
+praticaBiosHardwareUFC.asm: 465 lines, 2 passes, 0 ms, 1 warnings, 1 errors
