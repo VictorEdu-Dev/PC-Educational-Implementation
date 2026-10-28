@@ -450,21 +450,27 @@ praticaBiosHardwareUFC.asm
 000F00B6  0AC0                  	OR	AL,AL			; SUM = 0?
 000F00B8                        	RET
 000F00B9                        ROS_CHECKSUM	ENDP
-000F00B9  FB                    	STI				;ativa interrupcoes novamente
 
-000F00BA                        loop_principal:
-000F00BA  90                        nop
-000F00BB  EBFD                      jmp     loop_principal
+                                ;--------------------------------------------------------
+                                ;	VOLTA AO NOSSO CÓDIGO
+                                ;--------------------------------------------------------
+000F00B9  B80000                	mov ax,0000h
+000F00BC  8ED8                  	mov ds,ax
+000F00BE  FB                    	STI				;ativa interrupcoes novamente
+
+000F00BF                        loop_principal:
+000F00BF  90                        nop
+000F00C0  EBFD                      jmp     loop_principal
 
 
                                 org 0FFFF0h
 
 000FFFF0                        inicio:
-000FFFF0  B80000                    mov ax,0000h
-000FFFF3  8ED8                      mov ds,ax
-000FFFF5  8ED0                      mov ss,ax	
-000FFFF7  BB0001                    mov bx,0100h
-000FFFFA  EA00000000                jmp far ptr init_bios
+000FFFF0  B80000                	mov ax,0000h
+000FFFF3  8ED8                  	mov ds,ax
+000FFFF5  8ED0                  	mov ss,ax	
+000FFFF7  BB0001                	mov bx,0100h
+000FFFFA  EA00000000            	jmp far ptr init_bios
 
                                 end inicio
 
@@ -593,7 +599,7 @@ init_8251  . . . . . . . . . . .        L Near         F0007h PRATICABIOSHARDWAR
 init_8253  . . . . . . . . . . .        L Near         F002Fh PRATICABIOSHARDWAREUFC_TEXT 
 init_8259  . . . . . . . . . . .        L Near         F001Fh PRATICABIOSHARDWAREUFC_TEXT 
 init_bios  . . . . . . . . . . .        L Near         F0000h PRATICABIOSHARDWAREUFC_TEXT 
-loop_principal . . . . . . . . .        L Near         F00BAh PRATICABIOSHARDWAREUFC_TEXT 
+loop_principal . . . . . . . . .        L Near         F00BFh PRATICABIOSHARDWAREUFC_TEXT 
 uart_int . . . . . . . . . . . .        L Near         E0000h PRATICABIOSHARDWAREUFC_TEXT 
 
-praticaBiosHardwareUFC.asm: 467 lines, 2 passes, 0 ms, 1 warnings, 1 errors
+praticaBiosHardwareUFC.asm: 473 lines, 2 passes, 0 ms, 1 warnings, 1 errors

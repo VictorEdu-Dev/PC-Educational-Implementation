@@ -448,6 +448,12 @@ C26:
 	OR	AL,AL			; SUM = 0?
 	RET
 ROS_CHECKSUM	ENDP
+
+;--------------------------------------------------------
+;	VOLTA AO NOSSO CÓDIGO
+;--------------------------------------------------------
+	mov ax,0000h
+	mov ds,ax
 	STI				;ativa interrupcoes novamente
 
 loop_principal:
@@ -458,10 +464,10 @@ loop_principal:
 org 0FFFF0h
 
 inicio:
-    mov ax,0000h
-    mov ds,ax
-    mov ss,ax	
-    mov bx,0100h
-    jmp far ptr init_bios
+	mov ax,0000h
+	mov ds,ax
+	mov ss,ax	
+	mov bx,0100h
+	jmp far ptr init_bios
 
 end inicio
